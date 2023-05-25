@@ -1,26 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import isUrl from 'is-url'
 import { isKeyHotkey } from 'is-hotkey'
 import { css } from '@emotion/css'
-import {
-  Editable,
-  withReact,
-  useSlate,
-  useSelected,
-  useFocused,
-  ReactEditor,
-} from 'slate-react'
 import * as SlateReact from 'slate-react'
 import {
-  Transforms,
-  Editor,
-  Range,
+  Editable,
+  useFocused,
+  useSelected,
+  useSlate,
+  withReact,
+} from 'slate-react'
+import {
   createEditor,
-  Element as SlateElement,
   Descendant,
+  Editor,
+  Text as SlateText,
+  Element as SlateElement,
+  Range,
+  Transforms,
 } from 'slate'
 import { withHistory } from 'slate-history'
-import { LinkElement, ButtonElement } from './custom-types'
+import { ButtonElement, LinkElement } from './custom-types'
 
 import { Button, Icon, Toolbar } from '../components'
 
@@ -39,6 +39,7 @@ const initialValue: Descendant[] = [
           { text: 'hyperlink' },
           {
             type: 'button',
+            prefix: 'prompt',
             children: [{ text: 'editable button' }],
           },
         ],
@@ -118,12 +119,22 @@ const InlinesExample = () => {
           console.log('tab', event)
           event.preventDefault()
           const { selection } = editor
-          console.log('selection', selection)
-          const path = Editor.path(editor, selection!)
-          const [node, nextPath] = Editor.next(editor, { at: path })
-          Editor.withoutNormalizing(editor, () => {
-            Transforms.select(editor, nextPath)
-          })
+
+          const [parentNode, parentNodePoint] = Editor.parent(editor, selection)
+          if (parentNode.type === 'button') {
+            const [nextNode, nextPoint] = Editor.next(editor, { at: selection })
+            Transforms.select(editor, nextPoint)
+          } else {
+            const [curNode, curNodePoint] = Editor.node(editor, selection)
+            const [nextNode, nextPoint] = Editor.next(editor, { at: selection })
+            if (curNode.text === '' && nextNode === undefined) {
+              break
+            }
+            const [node, nextPath] = Editor.next(editor, { at: selection })
+            Editor.withoutNormalizing(editor, () => {
+              Transforms.select(editor, nextPath)
+            })
+          }
           break
         }
       }
@@ -169,8 +180,63 @@ const InlinesExample = () => {
   }
 
   return (
-    <SlateReact.Slate editor={editor} value={initialValue}>
+    <SlateReact.Slate
+      editor={editor}
+      value={initialValue}
+      onChange={value => {
+        const { selection } = editor
+        if (selection && Range.isCollapsed(selection)) {
+          // console.log("第一个文本",value[0].children[0].text)
+
+          const [start] = Range.edges(selection)
+          const wordBefore = Editor.before(editor, start, { unit: 'word' })
+          const before = wordBefore && Editor.before(editor, wordBefore)
+          const beforeRange = before && Editor.range(editor, before, start)
+          const beforeText = beforeRange && Editor.string(editor, beforeRange)
+          const beforeMatch = beforeText && beforeText.match(/^\/(\w+)$/)
+          const after = Editor.after(editor, start)
+          const afterRange = Editor.range(editor, start, after)
+          const afterText = Editor.string(editor, afterRange)
+          const afterMatch = afterText.match(/^(\s|$)/)
+
+          if (beforeMatch && afterMatch) {
+            console.log("trigger '@' autocomplete")
+            return
+          }
+        }
+      }}
+    >
       <Toolbar>
+        <button
+          onMouseDown={event => {
+            Transforms.delete(editor, { at: Editor.range(editor, []) })
+            Transforms.insertText(editor, '')
+          }}
+        >
+          clear
+        </button>
+        <button
+          onMouseDown={event => {
+            const { children } = editor
+            const texts: string[] = []
+            const getText = (nodes: Node[]) => {
+              nodes.forEach(node => {
+                if (SlateText.isText(node)) {
+                  texts.push(node.text)
+                } else if (node.type === 'button') {
+                  texts.push(`${node.prefix ?? ''}:`)
+                  getText(node.children)
+                } else if (node.children) {
+                  getText(node.children)
+                }
+              })
+            }
+            getText(children)
+            console.log(texts.join(''))
+          }}
+        >
+          get all text
+        </button>
         <AddLinkButton />
         <RemoveLinkButton />
         <ToggleEditableButtonButton />

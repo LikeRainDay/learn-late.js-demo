@@ -45,7 +45,11 @@ export type ImageElement = {
 
 export type LinkElement = { type: 'link'; url: string; children: Descendant[] }
 
-export type ButtonElement = { type: 'button'; children: Descendant[] }
+export type ButtonElement = {
+  type: 'button'
+  prefix?: string
+  children: Descendant[]
+}
 
 export type BadgeElement = { type: 'badge'; children: Descendant[] }
 
