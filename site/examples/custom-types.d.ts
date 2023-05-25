@@ -57,6 +57,17 @@ export type MentionElement = {
   children: CustomText[]
 }
 
+export type OptionalElement = {
+  type: 'optional'
+  children: Descendant[]
+}
+
+export type ApplicationCommandElement = {
+  type: 'applicationCommand'
+  afterPlaceHolder: string
+  children: Descendant[]
+}
+
 export type ParagraphElement = {
   type: 'paragraph'
   align?: string
@@ -105,6 +116,8 @@ type CustomElement =
   | VideoElement
   | CodeBlockElement
   | CodeLineElement
+  | OptionalElement
+  | ApplicationCommandElement
 
 export type CustomText = {
   bold?: boolean

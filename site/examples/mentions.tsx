@@ -31,6 +31,21 @@ const MentionExample = () => {
 
   const onKeyDown = useCallback(
     event => {
+      switch (event.key) {
+        case 'Tab': {
+          event.preventDefault()
+          const { selection } = editor
+          const path = Editor.path(editor, selection)
+          // Editor.withoutNormalizing(editor, () => {
+          //   Transforms.move(editor)
+          // })
+
+          const nextLocation = Editor.next(editor, { at: path })
+          if (nextLocation) {
+            Transforms.select(editor, nextLocation[1])
+          }
+        }
+      }
       if (target && chars.length > 0) {
         switch (event.key) {
           case 'ArrowDown':
@@ -201,9 +216,85 @@ const Element = props => {
   switch (element.type) {
     case 'mention':
       return <Mention {...props} />
+    case 'optional':
+      return <Optional {...props} />
+    case 'applicationCommand':
+      return <ApplicationCommand {...props} />
     default:
       return <p {...attributes}>{children}</p>
   }
+}
+
+const Optional = ({ attributes, children, element }) => {
+  const selected = useSelected()
+  const focused = useFocused()
+  const optionalMain: React.CSSProperties = {
+    display: 'inline-flex',
+    borderRadius: '4px',
+    border: '1px solid transparent',
+    boxShadow: selected && focused ? '0 0 0 2px #B4D5FF' : 'none',
+    alignSelf: 'flex-start',
+    justifyContent: 'flex-start',
+    maxWidth: 'calc(100% - 30px)',
+    borderColor: 'grey',
+    // width: 'max-content',
+  }
+
+  const optionalKey: React.CSSProperties = {
+    display: 'inline-block',
+    padding: '1px 8px',
+    borderTopLeftRadius: '4px',
+    borderBottomLeftRadius: '4px',
+    userSelect: 'none',
+    flexShrink: 0,
+    outline: 0,
+    backgroundColor: '#151313',
+    color: '#fff',
+    textAlign: 'left',
+  }
+
+  const optionalValue: React.CSSProperties = {
+    display: 'block',
+    padding: '1px 8px',
+    verticalAlign: 'top',
+    whiteSpace: 'pre-wrap',
+    flex: 1,
+    outline: 0,
+  }
+
+  return (
+    <>
+      <span style={optionalMain}>
+        <span style={optionalKey} {...attributes} contentEditable={false}>
+          {element.prefix}
+        </span>
+        <span style={optionalValue}>{children}</span>
+      </span>
+    </>
+  )
+}
+
+const ApplicationCommand = ({ attributes, children, element }) => {
+  const styles = {
+    '&::after': {
+      flex: 1,
+      paddingLeft: 4,
+      paddingTop: 4,
+      whiteSpace: 'nowrap',
+      color: '#d71212',
+      pointerEvents: 'none',
+      userSelect: 'none',
+      content: 'attr(data-trailing-placeholder)',
+    },
+  } as any
+
+  return (
+    <>
+      <div data-trailing-placeholder={element.afterPlaceHolder} style={styles}>
+        {children}
+      </div>
+    </>
+  )
 }
 
 const Mention = ({ attributes, children, element }) => {
@@ -226,16 +317,18 @@ const Mention = ({ attributes, children, element }) => {
   if (element.children[0].italic) {
     style.fontStyle = 'italic'
   }
+
   return (
-    <span
-      {...attributes}
-      contentEditable={false}
-      data-cy={`mention-${element.character.replace(' ', '-')}`}
-      style={style}
-    >
-      @{element.character}
-      {children}
-    </span>
+    <>
+      <span
+        {...attributes}
+        contentEditable={false}
+        data-cy={`mention-${element.character.replace(' ', '-')}`}
+        style={style}
+      >
+        @{element.character} / {children}
+      </span>
+    </>
   )
 }
 
@@ -276,16 +369,36 @@ const initialValue: Descendant[] = [
       { text: 'Try mentioning characters, like ' },
       {
         type: 'mention',
-        character: 'R2-D2',
-        children: [{ text: '', bold: true }],
+        character: 'R2-D222',
+        children: [{ text: '2312332424234123' }],
       },
       { text: ' or ' },
       {
         type: 'mention',
         character: 'Mace Windu',
-        children: [{ text: '' }],
+        children: [{ text: '231231ss23', bold: false }],
       },
       { text: '!' },
+    ],
+  },
+  {
+    type: 'applicationCommand',
+    afterPlaceHolder: 'Type / to choose an action',
+    children: [
+      { text: '/like' },
+      { text: ' ' },
+      {
+        type: 'mention',
+        character: 'R2-D222',
+        children: [{ text: '2312332424234123' }],
+      },
+      { text: ' or ' },
+      {
+        type: 'optional',
+        children: [{ text: '231231ss23', bold: false }],
+      },
+      { text: ' ' },
+      { text: ' last data' },
     ],
   },
 ]

@@ -21,8 +21,9 @@ const StylingExample = () => {
         <Editable
           style={{
             backgroundColor: 'rgb(255, 230, 156)',
-            minHeight: '200px',
+            maxHeight: '200px',
             outline: 'rgb(0, 128, 0) solid 2px',
+            overflowY: 'scroll',
           }}
         />
       </Slate>

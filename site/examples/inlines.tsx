@@ -1,8 +1,15 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import isUrl from 'is-url'
 import { isKeyHotkey } from 'is-hotkey'
 import { css } from '@emotion/css'
-import { Editable, withReact, useSlate, useSelected } from 'slate-react'
+import {
+  Editable,
+  withReact,
+  useSlate,
+  useSelected,
+  useFocused,
+  ReactEditor,
+} from 'slate-react'
 import * as SlateReact from 'slate-react'
 import {
   Transforms,
@@ -28,7 +35,13 @@ const initialValue: Descendant[] = [
       {
         type: 'link',
         url: 'https://en.wikipedia.org/wiki/Hypertext',
-        children: [{ text: 'hyperlink' }],
+        children: [
+          { text: 'hyperlink' },
+          {
+            type: 'button',
+            children: [{ text: 'editable button' }],
+          },
+        ],
       },
       {
         text: ', and here is a more unusual inline: an ',
@@ -38,11 +51,19 @@ const initialValue: Descendant[] = [
         children: [{ text: 'editable button' }],
       },
       {
+        type: 'optional',
+        children: [{ text: 'editable button' }],
+      },
+      {
         text: '! Here is a read-only inline: ',
       },
       {
         type: 'badge',
         children: [{ text: 'Approved' }],
+      },
+      {
+        type: 'button',
+        children: [{ text: 'editable button' }],
       },
       {
         text: '.',
@@ -75,15 +96,38 @@ const InlinesExample = () => {
 
   const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = event => {
     const { selection } = editor
-
-    // Default left/right behavior is unit:'character'.
-    // This fails to distinguish between two cursor positions, such as
-    // <inline>foo<cursor/></inline> vs <inline>foo</inline><cursor/>.
-    // Here we modify the behavior to unit:'offset'.
-    // This lets the user step into and out of the inline without stepping over characters.
-    // You may wish to customize this further to only use unit:'offset' in specific cases.
     if (selection && Range.isCollapsed(selection)) {
       const { nativeEvent } = event
+
+      if (event.key === 'Enter') {
+        event.preventDefault()
+      }
+      switch (event.key) {
+        case 'Backspace': {
+          // const basePoint = Editor.before(editor, selection, {})
+          const [node, path] = Editor.above(editor, {})
+          const [nodeFirst, pathFirst] = Editor.first(editor, selection)
+          if (node.type === 'button') {
+            if (nodeFirst.text === '') {
+              Transforms.removeNodes(editor, { at: path })
+            }
+          }
+          break
+        }
+        case 'Tab': {
+          console.log('tab', event)
+          event.preventDefault()
+          const { selection } = editor
+          console.log('selection', selection)
+          const path = Editor.path(editor, selection!)
+          const [node, nextPath] = Editor.next(editor, { at: path })
+          Editor.withoutNormalizing(editor, () => {
+            Transforms.select(editor, nextPath)
+          })
+          break
+        }
+      }
+
       if (isKeyHotkey('left', nativeEvent)) {
         event.preventDefault()
         Transforms.move(editor, { unit: 'offset', reverse: true })
@@ -94,7 +138,34 @@ const InlinesExample = () => {
         Transforms.move(editor, { unit: 'offset' })
         return
       }
+    } else {
+      switch (event.key) {
+        case 'Tab': {
+          const isSelectable = Editor.isSelectable(editor, editor.selection)
+          const [nextNode, nextPoint] = Editor.next(editor, {
+            at: editor.selection,
+          })
+          console.log('nextNode', nextNode)
+          console.log('nextPoint', nextPoint)
+          if (nextNode.type === 'button') {
+            Transforms.select(editor, nextPoint)
+          } else {
+            Transforms.select(editor, nextPoint)
+          }
+
+          event.preventDefault()
+          // if (isSelectable) {
+          //   Transforms.deselect(editor)
+          //   Transforms.move(editor, { unit: 'offset' })
+          // }
+        }
+      }
     }
+  }
+  const handlePaste = event => {
+    event.preventDefault()
+    const text = event.clipboardData.getData('text/plain')
+    editor.insertText(text)
   }
 
   return (
@@ -109,8 +180,73 @@ const InlinesExample = () => {
         renderLeaf={props => <Text {...props} />}
         placeholder="Enter some text..."
         onKeyDown={onKeyDown}
+        onPaste={handlePaste}
       />
     </SlateReact.Slate>
+  )
+}
+
+const Optional = ({ attributes, children, element }) => {
+  const editor = useSlate()
+  const selected = useSelected()
+  const focused = useFocused()
+  const [canDelete, setCanDelete] = useState(false)
+  const optionalMain: React.CSSProperties = {
+    display: 'inline-flex',
+    borderRadius: '4px',
+    border: '1px solid transparent',
+    boxShadow: selected && focused ? '0 0 0 2px #B4D5FF' : 'none',
+    alignSelf: 'flex-start',
+    justifyContent: 'flex-start',
+    maxWidth: 'calc(100% - 30px)',
+    borderColor: 'grey',
+    // width: 'max-content',
+  }
+
+  const optionalKey: React.CSSProperties = {
+    display: 'inline-block',
+    padding: '1px 8px',
+    borderTopLeftRadius: '4px',
+    borderBottomLeftRadius: '4px',
+    userSelect: 'none',
+    flexShrink: 0,
+    outline: 0,
+    backgroundColor: '#151313',
+    color: '#fff',
+    textAlign: 'left',
+  }
+
+  const optionalValue: React.CSSProperties = {
+    display: 'inline-block',
+    outline: 'none',
+    padding: '1px 8px',
+    verticalAlign: 'top',
+    whiteSpace: 'pre-wrap',
+    overflowY: 'scroll',
+    overflowX: 'hidden',
+    flex: 1,
+  }
+  // useEffect(() => {
+  //   const isEmpty = Editor.isEmpty(editor, element)
+  //   const text = Editor.hasTexts(editor, element)
+  //   if (isEmpty && text) {
+  //     Transforms.removeNodes(editor, {
+  //       at: ReactEditor.findPath(editor, element),
+  //     })
+  //   }
+  // }, [element])
+
+  return (
+    <>
+      <span style={optionalMain} {...attributes}>
+        <span style={optionalKey} contentEditable={false}>
+          prompt
+        </span>
+        <InlineChromiumBugfix />
+        <span style={optionalValue}>{children}</span>
+        <InlineChromiumBugfix />
+      </span>
+    </>
   )
 }
 
@@ -129,8 +265,10 @@ const withInlines = editor => {
   editor.isElementReadOnly = element =>
     element.type === 'badge' || isElementReadOnly(element)
 
-  editor.isSelectable = element =>
+  editor.isSelectable = element => {
+    console.log(element)
     element.type !== 'badge' && isSelectable(element)
+  }
 
   editor.insertText = text => {
     if (text && isUrl(text)) {
@@ -148,6 +286,22 @@ const withInlines = editor => {
     } else {
       insertData(data)
     }
+  }
+  editor.insertText = text => {
+    if (text && editor.isInline(editor)) {
+      const { selection } = editor
+
+      if (selection) {
+        const [parent] = Editor.parent(editor, selection.focus.path)
+        if (parent && parent.type !== 'inline') {
+          const inlineText = { type: 'inline', children: [{ text }] }
+          Transforms.wrapNodes(editor, inlineText, { split: true })
+          return
+        }
+      }
+    }
+
+    insertText(text)
   }
 
   return editor
@@ -283,6 +437,7 @@ const EditableButtonComponent = ({ attributes, children }) => {
     */
     <span
       {...attributes}
+      tabIndex={0}
       onClick={ev => ev.preventDefault()}
       // Margin is necessary to clearly show the cursor adjacent to the button
       className={css`
@@ -296,6 +451,10 @@ const EditableButtonComponent = ({ attributes, children }) => {
       `}
     >
       <InlineChromiumBugfix />
+      <span contentEditable={false} style={{ backgroundColor: 'white' }}>
+        {attributes}
+      </span>
+
       {children}
       <InlineChromiumBugfix />
     </span>
@@ -332,11 +491,13 @@ const Element = props => {
     case 'link':
       return <LinkComponent {...props} />
     case 'button':
-      return <EditableButtonComponent {...props} />
+      return <Optional {...props} />
+    case 'optional':
+      return <Optional {...props} />
     case 'badge':
       return <BadgeComponent {...props} />
     default:
-      return <p {...attributes}>{children}</p>
+      return <span {...attributes}>{children}</span>
   }
 }
 
